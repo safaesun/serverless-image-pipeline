@@ -1,0 +1,18 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {"Sid": "S3", "Effect": "Allow",
+     "Action": ["s3:GetObject", "s3:PutObject"],
+     "Resource": ["arn:aws:s3:::img-source-safae/*", "arn:aws:s3:::img-dest-safae/*"]},
+    {"Sid": "DDB", "Effect": "Allow",
+     "Action": ["dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:GetItem"],
+     "Resource": "arn:aws:dynamodb:eu-west-3:ACCOUNT_ID:table/images"},
+    {"Sid": "SNS", "Effect": "Allow", "Action": "sns:Publish",
+     "Resource": "arn:aws:sns:eu-west-3:ACCOUNT_ID:image-notifications"},
+    {"Sid": "SQS", "Effect": "Allow",
+     "Action": ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:GetQueueAttributes"],
+     "Resource": "arn:aws:sqs:eu-west-3:ACCOUNT_ID:image-processing-queue"},
+    {"Sid": "SFN", "Effect": "Allow", "Action": "states:StartExecution",
+     "Resource": "arn:aws:states:eu-west-3:ACCOUNT_ID:stateMachine:image-pipeline"}
+  ]
+}
