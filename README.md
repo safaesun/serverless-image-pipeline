@@ -80,3 +80,7 @@ Cette fois, j'ai testé le pipeline comme le ferait un vrai client, depuis Cloud
 L'API m'a renvoyé un identifiant d'image, S3 a accepté l'upload (code HTTP 200), et quelques secondes plus tard la ligne de DynamoDB est passée à `COMPLETED`, avec les dimensions de l'image et les chemins de la miniature et de la version complète :
 
 ![Test via l'API](docs/screenshots/06-api-presigned-test.png)
+### Étape 14 : CloudFront
+Distribution CloudFront devant le bucket destination, qui reste **privé** : accès uniquement via Origin Access Control (OAC) grâce à la bucket policy `AllowCloudFrontRead`. HTTPS obligatoire, cache `CachingOptimized`, compression. Les objets ont `Cache-Control: immutable` et des noms uniques : pas d'invalidation nécessaire.
+
+![Cache Miss puis Hit](docs/screenshots/07-cloudfront-miss-hit.png)
