@@ -84,3 +84,13 @@ L'API m'a renvoyé un identifiant d'image, S3 a accepté l'upload (code HTTP 200
 Distribution CloudFront devant le bucket destination, qui reste **privé** : accès uniquement via Origin Access Control (OAC) grâce à la bucket policy `AllowCloudFrontRead`. HTTPS obligatoire, cache `CachingOptimized`, compression. Les objets ont `Cache-Control: immutable` et des noms uniques : pas d'invalidation nécessaire.
 
 ![Cache Miss puis Hit](docs/screenshots/07-cloudfront-miss-hit.png)
+### Étape 15 : Gestion du cycle de vie S3
+
+Des règles Lifecycle ont été mises en place sur les deux buckets afin d'automatiser la gestion des fichiers et d'optimiser le stockage.
+
+- **Bucket source (`uploads/`)** : les images originales passent en classe Standard-IA après 30 jours et sont supprimées après 365 jours. Les chargements multipart incomplets sont supprimés après 7 jours.
+
+
+Cette configuration permet de réduire les coûts de stockage et d'éviter l'accumulation de fichiers inutilisés.
+
+![Règles Lifecycle S3](docs/screenshots/10-s3-lifecycle-rules.png)
