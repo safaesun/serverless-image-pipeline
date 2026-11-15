@@ -1,19 +1,23 @@
 # Serverless Image Processing Pipeline
 
-Pipeline serverless AWS : un upload dans S3 déclenche SQS, puis Step Functions orchestre le traitement (validation, miniature, redimensionnement, watermark, métadonnées). CloudFront sert les images. DynamoDB stocke le statut, SNS notifie.
+Ce projet est un pipeline de traitement d'images entièrement serverless sur AWS. Quand une image est déposée dans S3, un message est envoyé dans SQS, puis Step Functions orchestre le traitement : validation, miniature, redimensionnement, watermark et extraction des métadonnées. CloudFront sert ensuite les images, DynamoDB garde le statut de chacune, et SNS m'envoie un email à la fin.
 
 ![Architecture](docs/architecture.png)
 
 **Région** : eu-west-3 (Paris)
 
 ## Progression
+
 ### Étape 1 : Buckets S3
-- `SOURCE_BUCKET` (uploads) et `DEST_BUCKET` (images traitées), accès public bloqué.
-- Bucket policy `DenyInsecureTransport` : tout accès HTTP non chiffré est refusé (`infra/s3-*-bucket-policy.json`).
+J'ai créé deux buckets : `img-source-safae` pour les images envoyées, et `img-dest-safae` pour les images traitées. L'accès public est bloqué sur les deux.
+
+Chaque bucket a aussi une policy `DenyInsecureTransport`, qui refuse tout accès en HTTP non chiffré (`infra/s3-source-bucket-policy.json` et `infra/s3-dest-bucket-policy.json`).
+
 ### Étape 2 : DynamoDB
-Table `images` (clé de partition `imageId`, mode on-demand). Elle stocke le statut (`PENDING_UPLOAD`, `PROCESSING`, `COMPLETED`, `FAILED`), les dimensions et les clés des fichiers.
+J'ai créé la table `images` (clé de partition `imageId`, mode à la demande). Pour chaque image, elle garde son statut (`PENDING_UPLOAD`, `PROCESSING`, `COMPLETED` ou `FAILED`), ses dimensions, et les chemins S3 de l'original, de la miniature et de la version finale.
+
 ### Étape 3 : SNS
-Topic `image-notifications` avec abonnement email : envoie un email à la fin du traitement de chaque image (réussi ou échoué).
+J'ai créé la rubrique `image-notifications` et je m'y suis abonnée par email. À la fin du traitement de chaque image, je reçois un message qui m'indique si ça a réussi ou échoué.
 ### Étape 4 : SQS + DLQ
 - `image-processing-queue` : délai de visibilité 180 s, DLQ après 3 réceptions.
 - `image-processing-dlq` : reçoit les messages en échec.
@@ -29,6 +33,14 @@ Workflow Standard `image-pipeline` : **Validate** (retry sur erreurs Lambda) →
 
 ![Graphe Step Functions](docs/screenshots/01-stepfunctions-graph.png)
 ### Étape 9 : Lambda `start-workflow` et déclencheur SQS
-`start-workflow` fait le lien entre SQS et Step Functions. Un déclencheur SQS (batch size 1) l'appelle pour chaque message de `image-processing-queue`. Son code (`src/start_workflow/lambda_function.py`) lit la notification S3 contenue dans le message, en extrait le bucket et le chemin du fichier, puis démarre une exécution du workflow `image-pipeline`.
+J'ai créé `start-workflow` pour faire le lien entre la file SQS et Step Functions. Elle ne traite aucune image elle-même : son seul travail est de lancer le workflow.
 
-Si la fonction échoue, le message revient dans la file et, après 3 tentatives, part dans la DLQ : aucun message n'est perdu. Le timeout de la fonction (30 s) est inférieur au délai de visibilité de la file (180 s).
+Un déclencheur SQS (batch size 1) l'appelle pour chaque message de `image-processing-queue`. Son code (`src/start_workflow/lambda_function.py`) lit la notification S3 contenue dans le message, en extrait le nom du bucket et le chemin du fichier, puis démarre une exécution du workflow `image-pipeline`.
+
+Si la fonction échoue, le message n'est pas perdu : il revient dans la file et est retenté. Après 3 tentatives, il part dans la DLQ. J'ai aussi réglé le timeout de la fonction (30 s) bien en dessous du délai de visibilité de la file (180 s), pour qu'un message en cours de traitement ne réapparaisse pas trop tôt.
+### Étape 10 : Notification S3 vers SQS
+J'ai configuré le bucket source pour qu'il prévienne le reste du pipeline dès qu'une image arrive. À chaque fichier ajouté dans le dossier `uploads/`, S3 dépose un message dans la file `image-processing-queue`.
+
+J'ai limité la notification au préfixe `uploads/` pour que seuls les vrais uploads déclenchent un traitement, et pas n'importe quel autre fichier du bucket. Pour que S3 ait le droit d'écrire dans la file, la policy d'accès SQS de l'étape 4 autorise uniquement ce bucket à lui envoyer des messages.
+
+C'est le début de l'architecture événementielle : l'upload ne lance pas le traitement directement. Il laisse un message dans SQS, qui sera lu ensuite par `start-workflow`.
