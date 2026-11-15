@@ -74,3 +74,9 @@ J'ai d'abord créé une Lambda, `presign` (`src/presign/lambda_function.py`). Qu
 Ensuite, j'ai créé une API HTTP dans API Gateway, `image-upload-api`, avec une seule route, `POST /upload`, branchée sur cette Lambda. J'ai laissé le déploiement automatique activé sur l'étape `$default`, pour que chaque modification soit publiée sans action de ma part.
 
 Le client n'envoie donc jamais son image à mon API : il demande d'abord une URL, puis il envoie son image directement à S3. Le bucket reste privé, personne n'a d'accès permanent, et les gros fichiers ne passent ni par Lambda ni par API Gateway. Le dépôt de l'image dans `uploads/` déclenche ensuite tout le pipeline des étapes précédentes.
+### Étape 13 : Test de bout en bout via l'API
+Cette fois, j'ai testé le pipeline comme le ferait un vrai client, depuis CloudShell, sans toucher à la console S3. J'ai demandé une URL d'upload à mon API (`POST /upload`), j'ai envoyé une photo directement à S3 avec cette URL, puis j'ai interrogé DynamoDB pour voir où en était le traitement (`scripts/test-upload.sh`).
+
+L'API m'a renvoyé un identifiant d'image, S3 a accepté l'upload (code HTTP 200), et quelques secondes plus tard la ligne de DynamoDB est passée à `COMPLETED`, avec les dimensions de l'image et les chemins de la miniature et de la version complète :
+
+![Test via l'API](docs/screenshots/06-api-presigned-test.png)
