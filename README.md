@@ -44,3 +44,25 @@ J'ai configuré le bucket source pour qu'il prévienne le reste du pipeline dès
 J'ai limité la notification au préfixe `uploads/` pour que seuls les vrais uploads déclenchent un traitement, et pas n'importe quel autre fichier du bucket. Pour que S3 ait le droit d'écrire dans la file, la policy d'accès SQS de l'étape 4 autorise uniquement ce bucket à lui envoyer des messages.
 
 C'est le début de l'architecture événementielle : l'upload ne lance pas le traitement directement. Il laisse un message dans SQS, qui sera lu ensuite par `start-workflow`.
+### Étape 11 : Premier test de bout en bout
+J'ai déposé une photo dans le dossier `uploads/` depuis la console S3, puis j'ai attendu pour voir si le pipeline réagissait tout seul. Je n'ai rien lancé à la main, et tout s'est déclenché dès l'upload.
+
+Dans Step Functions, le workflow est allé jusqu'au bout et toutes les étapes sont passées au vert :
+
+![Exécution réussie](docs/screenshots/02-stepfunctions-execution-success.png)
+
+Côté DynamoDB, une ligne a été créée pour mon image. Elle est passée au statut `COMPLETED`, avec sa largeur et sa hauteur :
+
+![Item DynamoDB](docs/screenshots/03-dynamodb-item-completed.png)
+
+Dans le bucket destination, les deux versions sont bien là : la miniature dans `thumbnails/` et la grande image dans `full/` :
+
+![Bucket destination](docs/screenshots/04-s3-destination-folders.png)
+
+J'ai ouvert l'image de `full/` pour vérifier le watermark, et le texte apparaît bien en bas à droite :
+
+![Image avec watermark](docs/screenshots/05-image-watermark.png)
+
+Et pour finir, j'ai reçu l'email de SNS qui m'annonçait que le traitement était terminé :
+
+![Email SNS](docs/screenshots/11-sns-email.png)
