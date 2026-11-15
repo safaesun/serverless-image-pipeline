@@ -2,7 +2,7 @@
 
 Ce projet est un pipeline de traitement d'images entièrement serverless sur AWS. Quand une image est déposée dans S3, un message est envoyé dans SQS, puis Step Functions orchestre le traitement : validation, miniature, redimensionnement, watermark et extraction des métadonnées. CloudFront sert ensuite les images, DynamoDB garde le statut de chacune, et SNS m'envoie un email à la fin.
 
-![Architecture](docs/architecture.png)
+![Architecture](docs/screenshots/architecture.png)
 
 **Région** : eu-west-3 (Paris)
 
