@@ -94,3 +94,30 @@ Des règles Lifecycle ont été mises en place sur les deux buckets afin d'autom
 Cette configuration permet de réduire les coûts de stockage et d'éviter l'accumulation de fichiers inutilisés.
 
 ![Règles Lifecycle S3](docs/screenshots/10-s3-lifecycle-rules.png)
+## Ce que j'ai appris
+
+- **Pourquoi SQS ?** SQS permet de séparer le stockage des images sur S3 de leur traitement. Cela facilite la gestion des pics de charge et permet de relancer automatiquement les traitements en cas d'échec. Les messages qui échouent plusieurs fois sont envoyés dans la DLQ au lieu d'être perdus.
+
+- **Pourquoi utiliser un Lambda Layer ?** Pillow est une bibliothèque assez volumineuse. Je l'ai donc placée dans un Layer séparé plutôt que de l'intégrer dans chaque package Lambda. Cela simplifie la gestion des dépendances et leur réutilisation.
+
+- **Pourquoi Step Functions ?** Step Functions permet de visualiser et d'organiser les différentes étapes du traitement. Il facilite aussi la gestion des erreurs grâce aux mécanismes Retry et Catch, tout en conservant un historique des exécutions utile pour le débogage.
+
+- **Règles Lifecycle S3 :** Elles automatisent la gestion des fichiers stockés en transférant les anciens objets vers Standard-IA, puis en les supprimant selon la durée de conservation définie.
+
+- **CloudFront avec OAC :** Cette configuration permet de garder le bucket de destination privé tout en distribuant les images via le réseau mondial de CloudFront. Le système de cache améliore également les temps de chargement.
+
+- **URL pré-signées :** Elles permettent au client d'envoyer directement les images vers S3 sans avoir besoin de credentials AWS. Les données de l'image ne transitent donc pas par Lambda.
+
+## Limites actuelles et améliorations possibles
+
+Le projet fonctionne, mais certains points pourraient être améliorés avant une utilisation en production :
+
+- **Permissions IAM :** Le projet utilise actuellement un rôle IAM partagé. En production, il serait préférable d'attribuer un rôle distinct à chaque fonction Lambda, avec uniquement les permissions nécessaires à son fonctionnement.
+
+- **Sécurité de l'API :** L'API est actuellement publique et ne nécessite pas d'authentification. L'ajout d'Amazon Cognito ou d'un authorizer, accompagné d'une limitation du nombre de requêtes (*throttling*), permettrait de mieux sécuriser les accès.
+
+- **Validation de la taille des fichiers :** La limite de 10 Mo est actuellement vérifiée après l'envoi de l'image. L'utilisation d'une URL pré-signée de type POST avec la condition `content-length-range` permettrait de contrôler cette limite directement au moment de l'upload.
+
+- **Infrastructure as Code :** Les ressources AWS ne sont pas encore gérées sous forme de code. L'utilisation de Terraform, AWS CDK ou SAM faciliterait le déploiement, la maintenance et la reproduction de l'architecture.
+
+- **Watermark :** Le filigrane actuel est généré à partir d'un simple texte. Il pourrait être remplacé par un logo au format PNG pour obtenir un rendu plus personnalisé.
