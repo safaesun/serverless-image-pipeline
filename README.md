@@ -28,3 +28,7 @@ Python 3.12, 1024 Mo, timeout 1 min, Layer Pillow. Une seule fonction avec un pa
 Workflow Standard `image-pipeline` : **Validate** (retry sur erreurs Lambda) → **Parallel** (Thumbnail | Resize → Watermark | Metadata) → **Finalize**. Toute erreur passe par **MarkFailed** (statut FAILED + email) puis **Fail** (`infra/state-machine.asl.json`).
 
 ![Graphe Step Functions](docs/screenshots/01-stepfunctions-graph.png)
+### Étape 9 : Lambda `start-workflow` et déclencheur SQS
+`start-workflow` fait le lien entre SQS et Step Functions. Un déclencheur SQS (batch size 1) l'appelle pour chaque message de `image-processing-queue`. Son code (`src/start_workflow/lambda_function.py`) lit la notification S3 contenue dans le message, en extrait le bucket et le chemin du fichier, puis démarre une exécution du workflow `image-pipeline`.
+
+Si la fonction échoue, le message revient dans la file et, après 3 tentatives, part dans la DLQ : aucun message n'est perdu. Le timeout de la fonction (30 s) est inférieur au délai de visibilité de la file (180 s).
