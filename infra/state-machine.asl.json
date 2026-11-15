@@ -1,0 +1,165 @@
+{
+  "Comment": "Pipeline de traitement d'images",
+  "StartAt": "Validate",
+  "States": {
+    "Validate": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:eu-west-3:ACCOUNT_ID:function:image-worker",
+        "Payload": {
+          "action": "validate",
+          "imageId.$": "$.imageId",
+          "bucket.$": "$.bucket",
+          "key.$": "$.key"
+        }
+      },
+      "OutputPath": "$.Payload",
+      "Next": "ProcessImage",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.error",
+          "Next": "MarkFailed"
+        }
+      ]
+    },
+    "ProcessImage": {
+      "Type": "Parallel",
+      "ResultPath": "$.results",
+      "Branches": [
+        {
+          "StartAt": "Thumbnail",
+          "States": {
+            "Thumbnail": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": {
+                "FunctionName": "arn:aws:lambda:eu-west-3:ACCOUNT_ID:function:image-worker",
+                "Payload": {
+                  "action": "thumbnail",
+                  "imageId.$": "$.imageId",
+                  "bucket.$": "$.bucket",
+                  "key.$": "$.key"
+                }
+              },
+              "OutputPath": "$.Payload",
+              "End": true
+            }
+          }
+        },
+        {
+          "StartAt": "ResizeFull",
+          "States": {
+            "ResizeFull": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": {
+                "FunctionName": "arn:aws:lambda:eu-west-3:ACCOUNT_ID:function:image-worker",
+                "Payload": {
+                  "action": "resize",
+                  "imageId.$": "$.imageId",
+                  "bucket.$": "$.bucket",
+                  "key.$": "$.key"
+                }
+              },
+              "OutputPath": "$.Payload",
+              "Next": "Watermark"
+            },
+            "Watermark": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": {
+                "FunctionName": "arn:aws:lambda:eu-west-3:ACCOUNT_ID:function:image-worker",
+                "Payload": {
+                  "action": "watermark",
+                  "imageId.$": "$.imageId",
+                  "bucket.$": "$.bucket",
+                  "key.$": "$.key"
+                }
+              },
+              "OutputPath": "$.Payload",
+              "End": true
+            }
+          }
+        },
+        {
+          "StartAt": "ExtractMetadata",
+          "States": {
+            "ExtractMetadata": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": {
+                "FunctionName": "arn:aws:lambda:eu-west-3:ACCOUNT_ID:function:image-worker",
+                "Payload": {
+                  "action": "metadata",
+                  "imageId.$": "$.imageId",
+                  "bucket.$": "$.bucket",
+                  "key.$": "$.key"
+                }
+              },
+              "OutputPath": "$.Payload",
+              "End": true
+            }
+          }
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.error",
+          "Next": "MarkFailed"
+        }
+      ],
+      "Next": "Finalize"
+    },
+    "Finalize": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:eu-west-3:ACCOUNT_ID:function:image-worker",
+        "Payload": {
+          "action": "finalize",
+          "input.$": "$"
+        }
+      },
+      "OutputPath": "$.Payload",
+      "End": true
+    },
+    "MarkFailed": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:eu-west-3:ACCOUNT_ID:function:image-worker",
+        "Payload": {
+          "action": "failed",
+          "input.$": "$"
+        }
+      },
+      "OutputPath": "$.Payload",
+      "Next": "ProcessingFailed"
+    },
+    "ProcessingFailed": {
+      "Type": "Fail",
+      "Error": "ImageProcessingFailed",
+      "Cause": "Voir le statut FAILED dans DynamoDB et l'email SNS"
+    }
+  }
+}
