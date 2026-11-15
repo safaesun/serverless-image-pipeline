@@ -66,3 +66,11 @@ J'ai ouvert l'image de `full/` pour vérifier le watermark, et le texte apparaî
 Et pour finir, j'ai reçu l'email de SNS qui m'annonçait que le traitement était terminé :
 
 ![Email SNS](docs/screenshots/11-sns-email.png)
+### Étape 12 : API pour envoyer les images
+Jusqu'ici, je déposais les images à la main dans la console S3. Pour que n'importe quel client puisse en envoyer une, j'ai construit une petite API.
+
+J'ai d'abord créé une Lambda, `presign` (`src/presign/lambda_function.py`). Quand elle reçoit une demande, elle fait quatre choses : elle vérifie que le type de fichier est accepté (JPEG, PNG ou WEBP), elle génère un identifiant unique pour l'image, elle crée une ligne dans DynamoDB avec le statut `PENDING_UPLOAD`, puis elle renvoie une URL pré-signée. Cette URL est une adresse S3 temporaire, valable 5 minutes, qui autorise l'envoi d'un seul fichier à un emplacement précis de `uploads/`. Elle lit le nom du bucket et de la table dans ses variables d'environnement (`SOURCE_BUCKET` et `TABLE_NAME`).
+
+Ensuite, j'ai créé une API HTTP dans API Gateway, `image-upload-api`, avec une seule route, `POST /upload`, branchée sur cette Lambda. J'ai laissé le déploiement automatique activé sur l'étape `$default`, pour que chaque modification soit publiée sans action de ma part.
+
+Le client n'envoie donc jamais son image à mon API : il demande d'abord une URL, puis il envoie son image directement à S3. Le bucket reste privé, personne n'a d'accès permanent, et les gros fichiers ne passent ni par Lambda ni par API Gateway. Le dépôt de l'image dans `uploads/` déclenche ensuite tout le pipeline des étapes précédentes.
